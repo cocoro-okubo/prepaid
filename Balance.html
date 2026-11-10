@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>プリペイド管理</title>
+<style>
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; padding: 8px 10px 80px; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", sans-serif; background: #f4f6f8; color: #222; }
+.container { max-width: 560px; margin: 0 auto; }
+.bar { display: flex; align-items: baseline; gap: 8px; padding: 2px 4px 6px; }
+.bar .title { font-size: 17px; font-weight: 800; }
+.bar .tag { font-size: 12px; color: #888; font-weight: 700; }
+.card { background: #fff; border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+input { width: 100%; padding: 10px 12px; font-size: 18px; border: 2px solid #d9dee3; border-radius: 10px; outline: none; background: #fff; }
+input:focus { border-color: #8ab4d6; }
+button { border: none; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; color: #222; font-family: inherit; }
+button:active { transform: scale(0.98); }
+button:disabled { opacity: .4; cursor: default; transform: none; }
+
+/* 患者 */
+.top { display: grid; grid-template-columns: 112px 1fr; gap: 10px; align-items: center; }
+#patientId { background: #fffdf8; border-color: #d9c8b5; font-weight: 700; text-align: center; padding: 10px 6px; }
+.who { text-align: right; min-width: 0; }
+.name { font-size: 16px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bal { font-size: 30px; font-weight: 800; line-height: 1.15; letter-spacing: .5px; }
+.bal small { font-size: 12px; color: #888; font-weight: 700; margin-right: 6px; letter-spacing: 0; }
+.shared { display: none; margin-top: 6px; padding: 5px 8px; border-radius: 8px; background: #f1ebfb; color: #4b3a78; font-size: 12px; font-weight: 700; }
+
+/* 見出し */
+.sec { font-size: 13px; font-weight: 800; color: #666; margin: 0 2px 6px; }
+
+/* 使用 */
+.quick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick button { background: #dcefe2; padding: 10px 6px; font-size: 22px; line-height: 1.15; }
+.quick button small { display: block; font-size: 14px; font-weight: 700; color: #2f6b45; }
+.free { display: grid; grid-template-columns: 1fr 92px; gap: 8px; margin-top: 8px; }
+#useAmount { background: #f4fbf6; border-color: #b9ddc4; }
+#btnUse { background: #dcefe2; }
+
+/* チャージ */
+.charge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.charge { background: #dcecf8; padding: 9px 2px; font-size: 16px; }
+.charge small { display: block; margin-top: 2px; font-size: 11px; font-weight: 600; color: #4a6a85; }
+
+/* たたむ欄 */
+details.card { padding: 0; }
+details summary { list-style: none; cursor: pointer; padding: 11px 12px; font-size: 14px; font-weight: 800; color: #555; display: flex; justify-content: space-between; }
+details summary::-webkit-details-marker { display: none; }
+details summary::after { content: "＋"; color: #999; }
+details[open] summary::after { content: "－"; }
+.inner { padding: 0 12px 12px; }
+.old-row { display: grid; grid-template-columns: 1fr 92px; gap: 8px; }
+#oldBalance { background: #faf7ff; border-color: #d2c4ea; }
+#btnOld { background: #e9e0f5; }
+
+/* 履歴・取消 */
+.h-item { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid #eef0f2; }
+.h-date { font-size: 12px; color: #888; }
+.h-text { font-size: 14px; font-weight: 700; word-break: break-all; }
+.h-amt.minus { color: #b42318; } .h-amt.plus { color: #1b6e3c; }
+.h-item.off .h-text, .h-item.off .h-amt { color: #aaa; text-decoration: line-through; }
+.h-item.cx .h-text { color: #888; font-weight: 600; font-size: 12px; }
+.btn-cancel { background: #fde8e8; color: #9b1c1c; font-size: 14px; padding: 8px 12px; border-radius: 10px; }
+.badge { font-size: 12px; color: #999; font-weight: 700; }
+.h-note { font-size: 13px; color: #888; padding: 6px 0; }
+
+#toast { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: max-content; max-width: 92vw; padding: 12px 16px; border-radius: 12px; font-size: 15px; font-weight: 700; display: none; box-shadow: 0 6px 18px rgba(0,0,0,.15); z-index: 10; }
+#toast.ok { display: block; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+#toast.err { display: block; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.blocked { padding: 40px 10px; text-align: center; font-size: 16px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <div class="bar"><span class="title">プリペイド管理</span><span class="tag">受付用</span></div>
+
+  <!-- 患者・残高 -->
+  <div class="card">
+    <div class="top">
+      <input type="text" inputmode="numeric" id="patientId" placeholder="診察券番号" autocomplete="off">
+      <div class="who">
+        <div class="name" id="patientName">---</div>
+        <div class="bal"><small>残高</small>¥<span id="balance">0</span></div>
+      </div>
+    </div>
+    <div class="shared" id="shared"></div>
+  </div>
+
+  <!-- 使用 -->
+  <div class="card">
+    <div class="sec">使用</div>
+    <div class="quick">
+      <button class="op useq" data-amount="880" data-label="HV">HV<small>¥880</small></button>
+      <button class="op useq" data-amount="2200" data-label="B">B<small>¥2,200</small></button>
+    </div>
+    <div class="free">
+      <input type="text" inputmode="numeric" id="useAmount" placeholder="金額を入力" autocomplete="off">
+      <button class="op" id="btnUse">使用</button>
+    </div>
+  </div>
+
+  <!-- チャージ -->
+  <div class="card">
+    <div class="sec">チャージ</div>
+    <div class="charge-grid">
+      <button class="charge op" data-course="5500">5,500<small>→5,500円分</small></button>
+      <button class="charge op" data-course="11000">11,000<small>→12,000円分</small></button>
+      <button class="charge op" data-course="22000">22,000<small>→25,000円分</small></button>
+      <button class="charge op" data-course="33000">33,000<small>→39,000円分</small></button>
+      <button class="charge op" data-course="55000">55,000<small>→66,500円分</small></button>
+    </div>
+  </div>
+
+  <!-- 履歴・取消 -->
+  <details class="card" id="histBox">
+    <summary>履歴・取消（直近1か月）</summary>
+    <div class="inner" id="hist"><div class="h-note">診察券番号を入れると表示されます</div></div>
+  </details>
+
+  <!-- 旧カード -->
+  <details class="card">
+    <summary>旧カード残高移行</summary>
+    <div class="inner">
+      <div class="old-row">
+        <input type="text" inputmode="numeric" id="oldBalance" placeholder="旧カード残高" autocomplete="off">
+        <button class="op" id="btnOld">移行</button>
+      </div>
+    </div>
+  </details>
+</div>
+<div id="toast"></div>
+
+<script>
+// ===== 設定（GitHub Pages などGASの外に置く時だけ入れる） =====
+var GAS_URL = "https://script.google.com/macros/s/AKfycbySBmuA9Q0c7DBAWC9F-M-2SAXlRBDvIaLG_qGf8nozxtk-YIwfixVUDf1sLPb5fDjHcw/exec";   // 例：https://script.google.com/macros/s/xxxxxxxx/exec
+
+// ===== ここから下は変更不要 =====
+var IN_GAS = !!(window.google && google.script && google.script.run);
+var KEY = "<?= key ?>";
+if (KEY.charAt(0) === "<") KEY = "";   // GASの外に置いた時はURLの ?key= から読む
+if (!KEY) {
+  var q = new URLSearchParams(location.search).get("key");
+  try { if (q) localStorage.setItem("prepaidStaffKey", q); KEY = q || localStorage.getItem("prepaidStaffKey") || ""; } catch (e) { KEY = q || ""; }
+}
+KEY = String(KEY).replace(/[^0-9a-f]/gi, "");
+
+var cur = null;      // { id, name, balance, shared, rep, repName }
+var busy = false;
+var seq = 0;
+
+var $ = function(id) { return document.getElementById(id); };
+function half(v) { return String(v || "").replace(/[０-９]/g, function(c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }).replace(/[^\d]/g, ""); }
+function normId(v) { var s = half(v); return s ? String(parseInt(s, 10)) : ""; }
+function yen(n) { return Number(n || 0).toLocaleString(); }
+
+// GASへの呼び出し（GASのURLで開いた時も、外に置いた時も同じ書き方）
+function call(req, ok, ng) {
+  req.key = KEY;
+  if (IN_GAS) {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(function(e) { ng(e && e.message ? e.message : String(e)); }).api(req);
+  } else {
+    fetch(GAS_URL, { method: "POST", body: JSON.stringify(req) })
+      .then(function(r) { return r.json(); })
+      .then(ok)
+      .catch(function(e) { ng(e && e.message ? e.message : String(e)); });
+  }
+}
+
+// GASの外に置いた時：合言葉かGAS_URLがなければ止める（GASのURLの時はGAS側で確認済み）
+if (!IN_GAS && (!KEY || !GAS_URL)) {
+  $("app").innerHTML = '<div class="blocked">' +
+    (!GAS_URL ? 'index.html の GAS_URL がまだ入っていません' : 'このページは受付用のURL（?key= 付き）から開いてください') + '</div>';
+  throw new Error("stop");   // ここで止める
+}
+
+function toast(text, kind) {
+  var el = $("toast");
+  el.textContent = text; el.className = kind || "ok";
+  clearTimeout(toast.t);
+  toast.t = setTimeout(function() { el.className = ""; }, kind === "err" ? 6000 : 3500);
+}
+
+function refreshButtons() {
+  var ok = !!cur && cur.id === normId($("patientId").value) && !busy;
+  document.querySelectorAll(".op").forEach(function(b) { b.disabled = !ok; });
+}
+
+function setBalance(n) { cur.balance = n; $("balance").textContent = yen(n); }
+
+function showPatient(d) {
+  cur = d && d.found ? d : null;
+  $("patientName").textContent = cur ? cur.name + " 様" : (d && d.message ? d.message : (normId($("patientId").value) ? "見つかりません" : "---"));
+  $("balance").textContent = cur ? yen(cur.balance) : "0";
+  var sh = $("shared");
+  if (cur && cur.shared) { sh.style.display = "block"; sh.textContent = "家族で共有：代表 " + (cur.repName || "") + "さん（No." + cur.rep + "）の残高です"; }
+  else sh.style.display = "none";
+  refreshButtons();
+  loadHistory();
+}
+
+// 番号を打ったら少し待って自動で読み込む（打つ途中の番号の結果は使わない）
+var timer = null;
+function loadPatient() {
+  var id = normId($("patientId").value);
+  cur = null; refreshButtons();
+  if (!id) { showPatient(null); return; }
+  $("patientName").textContent = "読み込み中…";
+  var my = ++seq;
+  call({ action: "patient", patientId: id },
+    function(d) { if (my === seq) showPatient(d); },
+    function(msg) { if (my === seq) { showPatient(null); toast("読み込めませんでした：" + msg, "err"); } });
+}
+$("patientId").addEventListener("input", function() { clearTimeout(timer); cur = null; refreshButtons(); timer = setTimeout(loadPatient, 400); });
+
+function operate(req, question) {
+  if (!cur || busy) return;
+  var who = cur.name + "さん（No." + cur.id + "）";
+  if (!confirm(who + "\n" + question + (cur.shared ? "\n※家族共有：代表 No." + cur.rep + " の残高で記録します" : ""))) return;
+  busy = true; refreshButtons();
+  req.action = "operate";
+  req.patientId = cur.id;
+  call(req,
+    function(r) {
+      busy = false;
+      toast(r.message, r.success ? "ok" : "err");
+      if (r.success) {
+        if (req.type === "use") $("useAmount").value = "";
+        if (req.type === "migrate") $("oldBalance").value = "";
+        setBalance(r.balance);
+        loadHistory();
+      }
+      refreshButtons();
+    },
+    function(msg) { busy = false; refreshButtons(); toast("保存できませんでした：" + msg, "err"); });
+}
+
+function useAmount(a, label) {
+  if (!a) { toast("使用額を入力してください", "err"); return; }
+  if (cur && a > cur.balance) { toast("残高が足りません（現在 " + yen(cur.balance) + "円）", "err"); return; }
+  operate({ type: "use", amount: a }, (label ? label + "　" : "") + yen(a) + "円使用しますか？");
+}
+
+document.querySelectorAll(".useq").forEach(function(b) {
+  b.addEventListener("click", function() { useAmount(Number(b.getAttribute("data-amount")), b.getAttribute("data-label")); });
+});
+$("btnUse").addEventListener("click", function() { useAmount(Number(half($("useAmount").value))); });
+$("useAmount").addEventListener("keydown", function(e) { if (e.key === "Enter") $("btnUse").click(); });
+
+document.querySelectorAll(".charge").forEach(function(b) {
+  b.addEventListener("click", function() {
+    var c = Number(b.getAttribute("data-course"));
+    var credit = { 5500: 5500, 11000: 12000, 22000: 25000, 33000: 39000, 55000: 66500 }[c];
+    operate({ type: "charge", course: c }, yen(c) + "円のお支払いで、" + yen(credit) + "円分チャージしますか？");
+  });
+});
+
+$("btnOld").addEventListener("click", function() {
+  var a = Number(half($("oldBalance").value));
+  if (!a) { toast("旧カード残高を入力してください", "err"); return; }
+  operate({ type: "migrate", amount: a }, yen(a) + "円を旧カード残高として移行しますか？");
+});
+
+// ===== 履歴・取消 =====
+var histSeq = 0;
+function loadHistory() {
+  var box = $("hist");
+  if (!$("histBox").open) return;
+  if (!cur) { box.innerHTML = '<div class="h-note">診察券番号を入れると表示されます</div>'; return; }
+  box.innerHTML = '<div class="h-note">読み込み中…</div>';
+  var my = ++histSeq, pid = cur.id;
+  call({ action: "recent", patientId: pid },
+    function(r) { if (my === histSeq) renderHistory(r); },
+    function(msg) { if (my === histSeq) box.innerHTML = '<div class="h-note">読み込めませんでした：' + msg + '</div>'; });
+}
+$("histBox").addEventListener("toggle", loadHistory);
+
+function amountText(it) {
+  if (it.use > 0) return { t: "−¥" + yen(it.use), c: "minus" };
+  if (it.change > 0) return { t: "+¥" + yen(it.change), c: "plus" };
+  if (it.use < 0) return { t: "+¥" + yen(-it.use), c: "" };
+  if (it.change < 0) return { t: "−¥" + yen(-it.change), c: "" };
+  return { t: "", c: "" };
+}
+
+function renderHistory(r) {
+  var box = $("hist");
+  box.innerHTML = "";
+  if (!r || !r.success) { box.innerHTML = '<div class="h-note">' + ((r && r.message) || "読み込めませんでした") + '</div>'; return; }
+  if (!r.items.length) { box.innerHTML = '<div class="h-note">直近1か月の取引はありません</div>'; return; }
+
+  r.items.forEach(function(it) {
+    var row = document.createElement("div");
+    row.className = "h-item" + (it.cancelled ? " off" : "") + (it.isCancel ? " cx" : "");
+    var left = document.createElement("div");
+    var a = amountText(it);
+    var d = document.createElement("div"); d.className = "h-date"; d.textContent = it.date;
+    var t = document.createElement("div"); t.className = "h-text";
+    t.textContent = it.isCancel ? it.content.replace(/（元ID:[^）]+）$/, "") : it.content.replace(/\(No\.\d+\)$/, "");
+    var s = document.createElement("span"); s.className = "h-amt " + a.c; s.textContent = a.t ? "　" + a.t : "";
+    t.appendChild(s);
+    left.appendChild(d); left.appendChild(t);
+    row.appendChild(left);
+
+    var right = document.createElement("div");
+    if (it.isCancel) { right.className = "badge"; right.textContent = ""; }
+    else if (it.cancelled) { right.className = "badge"; right.textContent = "取消済"; }
+    else {
+      var b = document.createElement("button");
+      b.className = "btn-cancel op"; b.textContent = "取消";
+      b.addEventListener("click", function() { cancelTx(it); });
+      right.appendChild(b);
+    }
+    row.appendChild(right);
+    box.appendChild(row);
+  });
+  refreshButtons();
+}
+
+function cancelTx(it) {
+  if (!cur || busy) return;
+  var a = amountText(it);
+  var q = cur.name + "さん（No." + cur.id + "）\n" + it.date + "　" + it.content.replace(/\(No\.\d+\)$/, "") + "　" + a.t +
+          "\nこの取引を取り消しますか？";
+  if (!confirm(q)) return;
+  busy = true; refreshButtons();
+  call({ action: "cancel", patientId: cur.id, row: it.row, txId: it.txId },
+    function(r) {
+      busy = false;
+      toast(r.message, r.success ? "ok" : "err");
+      if (r.success) setBalance(r.balance);
+      loadHistory();
+      refreshButtons();
+    },
+    function(msg) { busy = false; refreshButtons(); toast("取り消せませんでした：" + msg, "err"); });
+}
+
+refreshButtons();
+</script>
+</body>
+</html>
