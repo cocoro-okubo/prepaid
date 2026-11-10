@@ -5,6 +5,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>プリペイド残高確認</title>
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
+<link rel="preconnect" href="https://static.line-scdn.net">
 <style>
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -33,6 +36,7 @@ button:disabled { opacity: .5; cursor: default; }
 .history-content { font-weight: 700; font-size: 15px; }
 .amt { font-weight: 800; white-space: nowrap; align-self: center; }
 .amt.minus { color: #b42318; } .amt.plus { color: #1b6e3c; }
+.updating { margin-top: 2px; font-size: 12px; color: #999; font-weight: 700; }
 .line-note { margin-top: 12px; font-size: 12px; color: #1b6e3c; font-weight: 700; text-align: center; }
 </style>
 </head>
@@ -61,6 +65,7 @@ button:disabled { opacity: .5; cursor: default; }
     <div id="shared" class="shared hide">ご家族で共有している残高です</div>
     <div class="balance-label">現在残高</div>
     <div class="balance">¥<span id="balance">0</span></div>
+    <div id="updating" class="updating hide">最新の残高を確認中…</div>
     <div class="history-title">最近の利用履歴</div>
     <div id="history"></div>
     <div id="lineNote" class="line-note hide">LINEと連携済み：次回もLINEで開くだけで確認できます</div>
@@ -93,7 +98,7 @@ function call(req, ok, ng) {
 }
 
 function showLogin(msg) {
-  hide("loading"); hide("result"); show("loginCard");
+  hide("loading"); hide("result"); show("loginCard"); clearLast();
   $("pin").value = "";
   $("message").textContent = msg || "";
   $("loginSub").innerHTML = USE_LINE
@@ -101,8 +106,21 @@ function showLogin(msg) {
     : "診察券番号と4桁PINを入力してください";
 }
 
-function showResult(data) {
+// 前回の表示をこのスマホにおぼえておく（LINEで開いた時、すぐに前回の残高を出すため）
+var CACHE_KEY = "prepaidLast";
+function saveLast(data) {
+  if (!USE_LINE) return;
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ name: data.name, balance: data.balance, shared: data.shared, history: data.history, linked: data.linked })); } catch (e) {}
+}
+function loadLast() {
+  try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch (e) { return null; }
+}
+function clearLast() { try { localStorage.removeItem(CACHE_KEY); } catch (e) {} }
+
+function showResult(data, isOld) {
   hide("loading"); hide("loginCard"); show("result");
+  $("updating").classList.toggle("hide", !isOld);
+  if (!isOld) saveLast(data);
   $("patientName").textContent = data.name + " 様";
   $("shared").classList.toggle("hide", !data.shared);
   $("balance").textContent = Number(data.balance).toLocaleString();
@@ -173,6 +191,8 @@ function relogin() {
 }
 
 function startLine() {
+  var last = loadLast();
+  if (last) showResult(last, true);   // 前回の残高をすぐ出して、裏で最新に入れ替える
   var s = document.createElement("script");
   s.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
   s.charset = "utf-8";
